@@ -1,0 +1,18 @@
+# Local credentials and configuration
+config.ini
+config.local.ini
+*.local.ini
+*.secret.ini
+.env
+.env.*
+!.env.example
+
+# Python generated files
+__pycache__/
+*.py[cod]
+
+# Local app metadata
+.video_agent/
+
+# macOS
+.DS_Store
