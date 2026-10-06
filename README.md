@@ -128,6 +128,28 @@ cat train.log | ./notify.py send -s "训练日志"
 
 `-t/--to` 可重复使用，未指定时使用配置中的 `mail.receiver_email`。`--cc` 指定抄送人；抄送人也会收到邮件。正文可使用纯文本、HTML、文件或管道输入。
 
+## HTML 邮件模板
+
+预置模板位于 `templates/` 目录：
+
+所有模板均按移动端邮件阅读场景优化，优先兼容 iPhone / iOS 邮件客户端：使用响应式单栏布局、移动端缩小留白、显式文字颜色、长路径与代码自动换行、窄屏表格压缩以及更大的按钮触控区域。
+
+| 模板名称 | 文件 | 适用场景 |
+| --- | --- | --- |
+| Apple 风格 | `templates/apple.html` | 产品通知、高层摘要、正式状态同步 |
+| Minimal 极简风 | `templates/minimal.html` | 日常通知、任务结果、简短汇报 |
+| Business Report 企业报告风 | `templates/business-report.html` | 周报、质量报告、指标汇报、正式汇报 |
+| Alert 告警通知风 | `templates/alert.html` | 异常、风险、监控告警、处置通知 |
+| Dark Tech 深色科技风 | `templates/dark-tech.html` | 系统状态、Agent 输出、技术报告、运维通知 |
+
+模板均为独立 HTML 文件，可直接复制后替换示例内容，也可通过 `--html-file` 直接发送：
+
+```bash
+./notify.py send -s "模板测试" -b "请查看 HTML 正文" --html-file templates/apple.html
+```
+
+另外，`templates/template-showcase.html` 用于集中预览上述 5 套模板风格。
+
 ### 使用其他配置文件
 
 ```bash

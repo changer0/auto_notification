@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="x-apple-disable-message-reformatting">
+  <meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no">
+  <title>告警通知邮件模板</title>
+  <style>
+    body{margin:0!important;padding:0!important;background:#f6f7f9!important;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}
+    table{border-spacing:0;border-collapse:collapse}
+    .shell{width:720px;max-width:720px}
+    .px{padding-left:34px!important;padding-right:34px!important}
+    @media(max-width:620px){
+      .outer{padding:12px 8px!important}
+      .shell{width:100%!important}
+      .px{padding-left:20px!important;padding-right:20px!important}
+      .title{font-size:27px!important}
+      .data th,.data td{padding:9px 8px!important;font-size:12px!important}
+      .button{display:block!important;text-align:center!important;padding:13px 18px!important}
+    }
+  </style>
+</head>
+<body bgcolor="#f6f7f9" style="margin:0;padding:0;background:#f6f7f9!important;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f6f7f9" style="width:100%;background:#f6f7f9!important;">
+    <tr><td class="outer" align="center" style="padding:30px 12px;">
+      <table role="presentation" class="shell" width="720" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="width:720px;max-width:720px;background:#ffffff!important;border:1px solid #e3e6ea;border-radius:12px;">
+        <tr><td bgcolor="#cf222e" style="height:7px;background:#cf222e!important;font-size:1px;line-height:1px;">&nbsp;</td></tr>
+        <tr><td class="px" bgcolor="#ffffff" style="padding:26px 34px 18px;background:#ffffff!important;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC',Arial,sans-serif;color:#24292f!important;-webkit-text-fill-color:#24292f;">
+          <span style="display:inline-block;padding:4px 9px;background:#ffebe9!important;border:1px solid #ff8182;border-radius:999px;font-size:12px;font-weight:800;color:#a40e26!important;-webkit-text-fill-color:#a40e26;">P1 告警</span>
+          <h1 class="title" style="margin:12px 0 4px;font-size:28px;line-height:1.25;color:#24292f!important;-webkit-text-fill-color:#24292f;">服务异常通知</h1>
+          <div style="font-size:13px;color:#6e7781!important;-webkit-text-fill-color:#6e7781;">首次发现：2026-10-06 11:42:00</div>
+        </td></tr>
+        <tr><td class="px" bgcolor="#ffffff" style="padding:0 34px 32px;background:#ffffff!important;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC',Arial,sans-serif;font-size:15px;line-height:1.7;color:#24292f!important;-webkit-text-fill-color:#24292f;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#fff8c5" style="width:100%;background:#fff8c5!important;border:1px solid #d4a72c;border-radius:8px;margin:12px 0 24px;">
+            <tr><td bgcolor="#fff8c5" style="padding:15px 16px;background:#fff8c5!important;color:#24292f!important;-webkit-text-fill-color:#24292f;"><strong>当前影响：</strong>部分请求失败率升高，核心链路仍可用，正在持续观察。</td></tr>
+          </table>
+          <h2 style="margin:0 0 10px;font-size:21px;color:#24292f!important;-webkit-text-fill-color:#24292f;">告警详情</h2>
+          <table class="data" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;table-layout:fixed;border-collapse:collapse;margin-bottom:28px;font-size:14px;">
+            <tr><th bgcolor="#f6f8fa" style="padding:10px;border:1px solid #d8dee4;background:#f6f8fa!important;text-align:left;color:#24292f!important;-webkit-text-fill-color:#24292f;">字段</th><th bgcolor="#f6f8fa" style="padding:10px;border:1px solid #d8dee4;background:#f6f8fa!important;text-align:left;color:#24292f!important;-webkit-text-fill-color:#24292f;">值</th></tr>
+            <tr><td style="padding:10px;border:1px solid #d8dee4;color:#24292f!important;-webkit-text-fill-color:#24292f;">服务</td><td style="padding:10px;border:1px solid #d8dee4;color:#24292f!important;-webkit-text-fill-color:#24292f;overflow-wrap:anywhere;word-break:break-word;">example-service</td></tr>
+            <tr><td style="padding:10px;border:1px solid #d8dee4;color:#24292f!important;-webkit-text-fill-color:#24292f;">环境</td><td style="padding:10px;border:1px solid #d8dee4;color:#24292f!important;-webkit-text-fill-color:#24292f;">production</td></tr>
+            <tr><td style="padding:10px;border:1px solid #d8dee4;color:#24292f!important;-webkit-text-fill-color:#24292f;">状态</td><td style="padding:10px;border:1px solid #d8dee4;color:#a40e26!important;-webkit-text-fill-color:#a40e26;font-weight:700;">异常</td></tr>
+            <tr><td style="padding:10px;border:1px solid #d8dee4;color:#24292f!important;-webkit-text-fill-color:#24292f;">恢复状态</td><td style="padding:10px;border:1px solid #d8dee4;color:#1a7f37!important;-webkit-text-fill-color:#1a7f37;font-weight:700;">处理中</td></tr>
+          </table>
+          <h2 style="margin:0 0 10px;font-size:21px;color:#24292f!important;-webkit-text-fill-color:#24292f;">处置建议</h2>
+          <ul style="margin:0 0 26px;padding-left:22px;color:#24292f!important;-webkit-text-fill-color:#24292f;"><li style="margin:5px 0;">确认最近发布与配置变更。</li><li style="margin:5px 0;">检查上游依赖、网络与资源指标。</li><li style="margin:5px 0;">必要时执行降级或回滚。</li></ul>
+          <h3 style="margin:18px 0 8px;font-size:18px;color:#24292f!important;-webkit-text-fill-color:#24292f;">三级标题：排查记录</h3><p style="margin:0 0 14px;color:#24292f!important;-webkit-text-fill-color:#24292f;">记录时间线、已排除项和当前判断。</p>
+          <h4 style="margin:18px 0 6px;font-size:15px;color:#24292f!important;-webkit-text-fill-color:#24292f;">四级标题：补充信息</h4><p style="margin:0 0 26px;color:#24292f!important;-webkit-text-fill-color:#24292f;">记录机器、版本、区域、请求标识等。</p>
+          <h2 style="margin:0 0 10px;font-size:21px;color:#24292f!important;-webkit-text-fill-color:#24292f;">日志片段</h2>
+          <div style="margin:0 0 26px;padding:14px;background:#0d1117!important;border-radius:7px;font-family:Consolas,'Courier New',monospace;font-size:13px;line-height:1.65;color:#c9d1d9!important;-webkit-text-fill-color:#c9d1d9;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;">ERROR request timeout
+service=example-service
+request_id=replace-me</div>
+          <a class="button" href="https://example.com" style="display:inline-block;padding:12px 18px;background:#cf222e!important;border-radius:6px;font-weight:700;color:#ffffff!important;-webkit-text-fill-color:#ffffff;text-decoration:none;">进入告警详情</a>
+        </td></tr>
+        <tr><td class="px" style="padding:18px 34px;border-top:1px solid #eaeef2;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC',Arial,sans-serif;font-size:12px;color:#6e7781!important;-webkit-text-fill-color:#6e7781;">自动告警通知 · 恢复后请关闭或更新事件状态</td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>
