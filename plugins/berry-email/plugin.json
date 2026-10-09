@@ -1,0 +1,21 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "berry-email",
+  "version": "1.1.0",
+  "description": "通过 Berry 读取邮箱、发送邮件和提交通知队列。",
+  "author": {
+    "name": "Lemon"
+  },
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Berry 邮件",
+        "shortDescription": "读取邮件、发送通知和可靠入队",
+        "longDescription": "连接 Berry 邮箱，支持只读收信、纯文本和 HTML 发信、5 套现有邮件模板（简约、苹果风、企业报告、告警、深色科技）及通知队列。OAuth 授权，唯一请求 ID 防止重复投递。",
+        "developerName": "Lemon",
+        "category": "Productivity",
+        "defaultPrompt": "用简约模板发送一封邮件通知。"
+      }
+    }
+  }
+}

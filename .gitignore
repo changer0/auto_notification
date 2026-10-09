@@ -20,3 +20,6 @@ retry_queue.log*
 
 # macOS
 .DS_Store
+
+# Generated plugin archives, previews and local verification screenshots
+/artifacts/

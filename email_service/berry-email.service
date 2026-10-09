@@ -1,0 +1,16 @@
+[Unit]
+Description=Berry email MCP service
+After=network-online.target
+
+[Service]
+WorkingDirectory=%h/auto_notification
+ExecStart=/usr/bin/python3 %h/auto_notification/email_service/server.py
+EnvironmentFile=%h/.config/file-upload-server/credentials.env
+Environment=EMAIL_PORT=8771
+UMask=0077
+NoNewPrivileges=true
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
