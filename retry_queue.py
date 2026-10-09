@@ -2,8 +2,9 @@
 """Retry queued notification emails from Berry's persistent queue.
 
 Each subdirectory of pending/ is one queue. A message file starts with a
-"Subject: ..." line followed by the body. The producer only writes files;
-this worker never interprets queued text as shell commands.
+"Subject: ..." line followed by a plain-text body, or an optional
+"X-Notify-Format: html" header, blank line, and HTML body. The producer
+only writes files; this worker never interprets queued text as shell commands.
 """
 
 import argparse
@@ -15,6 +16,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import tempfile
 import time
 
 
@@ -28,6 +30,7 @@ GENERIC_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
 MAX_PER_QUEUE = 10
 SEND_TIMEOUT = 60
 MIN_AGE_SECONDS = 30
+HTML_HEADER = "X-Notify-Format: html\n\n"
 
 
 def make_logger():
@@ -48,13 +51,35 @@ def discover_queues() -> list[Path]:
             if p.is_dir() and QUEUE_NAME.fullmatch(p.name)]
 
 
-def parse_message(path: Path) -> tuple[str | None, str]:
-    """Return (subject, body); subject is None when the file is malformed."""
+def parse_message(path: Path) -> tuple[str | None, str, str]:
+    """Return (subject, body, format); subject is None for malformed files."""
     text = path.read_text(encoding="utf-8")
     first_line, _, body = text.partition("\n")
     if not first_line.startswith("Subject:"):
-        return None, text
-    return (first_line[len("Subject:"):].strip() or None), body
+        return None, text, "text"
+    fmt = "html" if body.startswith(HTML_HEADER) else "text"
+    if fmt == "html":
+        body = body[len(HTML_HEADER):]
+    return (first_line[len("Subject:"):].strip() or None), body, fmt
+
+
+def send_queued(subject: str, body: str, fmt: str):
+    """Send without putting user-controlled HTML or body content in argv."""
+    base = [sys.executable, str(ROOT / "notify.py"), "send", "-s", subject]
+    if fmt == "html":
+        with tempfile.TemporaryDirectory(prefix="notify-queue-") as tmpdir:
+            html_path = Path(tmpdir) / "body.html"
+            html_path.write_text(body, encoding="utf-8")
+            return subprocess.run(
+                base + ["-b", "此邮件包含 HTML 内容，请使用支持 HTML 的邮件客户端查看。",
+                        "--html-file", str(html_path)],
+                cwd=ROOT, text=True, capture_output=True,
+                timeout=SEND_TIMEOUT, check=False,
+            )
+    return subprocess.run(
+        base, input=body, cwd=ROOT, text=True, capture_output=True,
+        timeout=SEND_TIMEOUT, check=False,
+    )
 
 
 def main():
@@ -99,7 +124,7 @@ def main():
                                 queue_dir.name, status_id)
                     continue
 
-                subject, body = parse_message(body_file)
+                subject, body, fmt = parse_message(body_file)
                 if subject is None:
                     logger.warning("Malformed message (missing 'Subject:' line) retained "
                                    "queue=%s ID=%s", queue_dir.name, status_id)
@@ -110,11 +135,7 @@ def main():
                     continue
 
                 try:
-                    outcome = subprocess.run(
-                        [sys.executable, str(ROOT / "notify.py"), "send", "-s", subject],
-                        input=body, cwd=ROOT, text=True, capture_output=True,
-                        timeout=SEND_TIMEOUT, check=False,
-                    )
+                    outcome = send_queued(subject, body, fmt)
                 except (OSError, subprocess.TimeoutExpired) as exc:
                     logger.warning("Delivery failed queue=%s ID=%s: %s",
                                    queue_dir.name, status_id, type(exc).__name__)
