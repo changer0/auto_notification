@@ -16,7 +16,7 @@ __pycache__/
 
 # Retry queue runtime state (Berry)
 pending/
-retry_thsottiaux.log*
+retry_queue.log*
 
 # macOS
 .DS_Store

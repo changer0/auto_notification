@@ -2,6 +2,8 @@
 
 `notify` 是一个基于 Python 标准库的邮件命令行工具，适合在脚本、定时任务和训练任务结束时发送邮件，也可以通过 IMAP 接收并查看邮件。发送支持纯文本、HTML、附件、管道输入、多收件人和抄送；接收支持查看正文、筛选未读邮件和保存附件，不需要安装第三方 Python 包。
 
+> 面向 AI Agent 的操作手册（命令速查、退出码处理、队列入队规则）见 [AI_USAGE.md](AI_USAGE.md)。
+
 ## 环境要求
 
 - Python 3.10 或更高版本
@@ -238,38 +240,44 @@ cat train.log | ./notify.py send -s "训练日志"
 
 脚本不会删除 berry 上的文件，并会跳过 `.git`、缓存、`.video_agent`、`.env` 及本地/私密配置文件，因此 berry 上已有的运行日志、专用脚本和配置会保留。
 
-## Berry 邮件补发队列（retry_thsottiaux）
+## 邮件补发队列（retry_queue）
 
-`retry_thsottiaux.py` 是部署在 Berry 上的独立补发工作程序，用于 @thsottiaux 的 ChatGPT / Codex 额度重置通知。它把「发现事件」与「发送邮件」拆开：上游定时任务只负责把待发正文写入本地队列，实际投递由 Berry 的 cron 每 10 分钟驱动本程序完成。这样即使上游发起发送的工具调用偶发失败，只要正文已入队，邮件仍会被投出。整体语义是**至少一次投递 + 已发送 ID 去重**，不是严格的 exactly-once。
+`retry_queue.py` 是部署在 Berry 上的通用补发工作程序：任何需要保证送达的邮件通知，发送方只需把正文写入 `pending/` 下的队列文件，实际投递由 Berry 的 cron 每 10 分钟驱动本程序完成。这样即使上游直接发送失败（网络抖动、工具调用失败等），只要正文已入队，邮件仍会被投出。整体语义是**至少一次投递 + 已发送 ID 去重**，不是严格的 exactly-once。前身 `retry_thsottiaux.py` 是专用于单一通知的版本，已由本程序取代。
 
-### pending 文件协议
+### 队列文件协议
+
+`pending/` 下每个子目录是一个队列，目录名即队列名（1～64 位，字母数字开头，可含 `-`、`_`）：
 
 | 路径 | 作用 |
 | --- | --- |
-| `pending/thsottiaux_reset/<status_id>.txt` | 待发邮件正文；文件名必须是 16~22 位纯数字的 X status ID |
-| `pending/thsottiaux_reset/sent_ids.txt` | 已成功发送的 status ID 台账，每行一个 |
-| `pending/thsottiaux_reset/.retry.lock` | 单实例运行锁（flock） |
+| `pending/<queue>/<id>.txt` | 待发消息文件，格式见下 |
+| `pending/<queue>/sent_ids.txt` | 该队列已发送的 ID 台账，每行一个 |
+| `pending/.retry.lock` | 全局单实例运行锁（flock） |
 
-生产者约定：
+通用队列的消息文件格式——第一行必须是 Subject 行，其余全部是正文（UTF-8 纯文本）：
 
-- 正文为 UTF-8 纯文本，写入 `pending/thsottiaux_reset/<status_id>.txt` 即视为入队；邮件主题固定为「ChatGPT 额度重置通知 - @thsottiaux」。
-- 同一 status ID 已发送或已入队时，不得重复入队。
-- 入队成功后由本程序负责发送与清理；生产者不直接调用 `notify.py` 发送，也不负责清理 sent ID。
+```text
+Subject: 邮件主题
+（此后全部内容为正文）
+```
+
+- `<id>`：1～64 位、字母数字开头、可含 `.`、`_`、`-` 的标识符，在同一队列内用于去重。
+- 兼容队列 `pending/thsottiaux_reset/` 沿用旧协议：文件为纯正文（无 Subject 行），文件名必须是 16～22 位纯数字的 X status ID，主题固定为「ChatGPT 额度重置通知 - @thsottiaux」。该队列服务于既有的 ChatGPT 定时任务，不要修改其协议。
 
 ### 工作逻辑
 
-1. 只接受文件名为 16~22 位纯数字的 `*.txt`，跳过 `sent_ids.txt`。
-2. 已发送过的 ID 直接清理对应文件；写入不足 30 秒的文件本轮暂缓，避免读到写了一半的正文；空正文保留并记日志。
-3. 通过 `subprocess.run` 参数数组调用 `notify.py send --body-file`，不把正文拼进 shell 命令，也不执行正文中的内容；单封发送超时 60 秒。
-4. 退出码为 0 且标准输出包含「已发送至」才确认成功；成功后先把 ID 追加进 `sent_ids.txt` 并 `fsync`，再删除 pending 文件。失败则保留文件，等下一轮重试。
-5. `flock` 防并发，单次最多处理 10 个文件；日志写入自动轮转的 `retry_thsottiaux.log`。
+1. 扫描 `pending/` 下所有合法队列目录；只处理文件名符合该队列 ID 规则的 `*.txt`，跳过 `sent_ids.txt`。
+2. 已发送过的 ID 直接清理对应文件；写入不足 30 秒的文件本轮暂缓，避免读到写了一半的正文；缺 `Subject:` 行、主题为空或正文为空的文件保留并记日志。
+3. 通过 `subprocess.run` 参数数组调用 `notify.py send`，正文经标准输入传递，不拼 shell 命令，也不执行正文中的内容；单封发送超时 60 秒。
+4. 退出码为 0 且标准输出包含「已发送至」才确认成功；成功后先把 ID 追加进该队列的 `sent_ids.txt` 并 `fsync`，再删除消息文件。失败则保留文件，等下一轮重试。
+5. `flock` 全局防并发，每个队列单次最多处理 10 个文件；日志写入自动轮转的 `retry_queue.log`。
 
 ### Cron 部署
 
 以下条目部署在 Berry 当前用户的 crontab 中（每 10 分钟一次）。**Cron 属于服务器环境配置，不会随代码同步自动迁移**，在其他主机部署时需单独创建：
 
 ```cron
-*/10 * * * * /usr/bin/python3 /home/berry/auto_notification/retry_thsottiaux.py >/dev/null 2>&1 # thsottiaux-email-retry
+*/10 * * * * /usr/bin/python3 /home/berry/auto_notification/retry_queue.py >/dev/null 2>&1 # email-retry-queue
 ```
 
 同一队列只允许一个消费者主机。不要在开发机和 Berry 上同时运行补发程序，否则可能重复发送。
@@ -280,17 +288,17 @@ cat train.log | ./notify.py send -s "训练日志"
 
 ```bash
 cd /home/berry/auto_notification
-python3 retry_thsottiaux.py --dry-run   # 只检查队列，不发送
-tail -n 50 retry_thsottiaux.log         # 查看补发日志
-crontab -l | grep thsottiaux-email-retry
+python3 retry_queue.py --dry-run   # 检查所有队列，不发送
+tail -n 50 retry_queue.log         # 查看补发日志
+crontab -l | grep email-retry-queue
 ```
 
 ### 故障边界
 
 - SMTP 成功但 `sent_ids.txt` 写入完成前进程异常时，理论上可能重发一次；本机制是至少一次 + 去重，不保证 exactly-once。
 - SMTP 持续失败时会每 10 分钟无限重试，目前没有最大重试次数、死信队列或独立告警；必要时需人工检查队列与日志。
-- 若生产者连 pending 文件都无法写入，通知不会凭空产生，上游任务必须如实报告「未入队」。
-- 本机制仅用于降低正常工具调用偶发失败的影响，不能用来绕过平台明确的安全限制。
+- 若生产者连队列文件都无法写入，通知不会凭空产生，上游任务必须如实报告「未入队」。
+- 本机制仅用于降低正常发送偶发失败的影响，不能用来绕过平台明确的安全限制。
 
 ## 退出码
 
