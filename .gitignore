@@ -14,5 +14,9 @@ __pycache__/
 # Local app metadata
 .video_agent/
 
+# Retry queue runtime state (Berry)
+pending/
+retry_thsottiaux.log*
+
 # macOS
 .DS_Store
