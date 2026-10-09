@@ -25,6 +25,10 @@ rsync -av \
     --exclude='/.git/' \
     --exclude='/__pycache__/' \
     --exclude='/.video_agent/' \
+    --exclude='/.zcodeignore' \
+    --exclude='/pending/' \
+    --exclude='retry_queue.log*' \
+    --exclude='retry_thsottiaux.log*' \
     --exclude='config.ini' \
     --exclude='*.local.ini' \
     --exclude='*.secret.ini' \
