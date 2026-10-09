@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
 """Retry queued notification emails from Berry's persistent queue.
 
-Each subdirectory of pending/ is one queue. In generic queues a message file
-starts with a "Subject: ..." line followed by the body; the legacy
-thsottiaux_reset queue keeps plain-body files with a fixed subject. The
-producer only writes files; this worker never interprets queued text as
-shell commands.
+Each subdirectory of pending/ is one queue. A message file starts with a
+"Subject: ..." line followed by the body. The producer only writes files;
+this worker never interprets queued text as shell commands.
 """
 
 import argparse
@@ -24,13 +22,8 @@ ROOT = Path(__file__).resolve().parent
 PENDING = ROOT / "pending"
 LOCK_PATH = PENDING / ".retry.lock"
 
-# Legacy queue: plain-body files named after 16-22 digit X status IDs,
-# with a fixed subject. Kept for the existing ChatGPT scheduled task.
-LEGACY_QUEUES = {"thsottiaux_reset": "ChatGPT 额度重置通知 - @thsottiaux"}
-
 QUEUE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}")
 GENERIC_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
-LEGACY_ID = re.compile(r"[0-9]{16,22}")
 
 MAX_PER_QUEUE = 10
 SEND_TIMEOUT = 60
@@ -55,11 +48,9 @@ def discover_queues() -> list[Path]:
             if p.is_dir() and QUEUE_NAME.fullmatch(p.name)]
 
 
-def parse_message(path: Path, legacy_subject: str | None) -> tuple[str | None, str]:
+def parse_message(path: Path) -> tuple[str | None, str]:
     """Return (subject, body); subject is None when the file is malformed."""
     text = path.read_text(encoding="utf-8")
-    if legacy_subject is not None:
-        return legacy_subject, text
     first_line, _, body = text.partition("\n")
     if not first_line.startswith("Subject:"):
         return None, text
@@ -81,14 +72,12 @@ def main():
             return 0
 
         for queue_dir in discover_queues():
-            legacy_subject = LEGACY_QUEUES.get(queue_dir.name)
             sent_file = queue_dir / "sent_ids.txt"
             sent_ids = (set(sent_file.read_text(encoding="utf-8").splitlines())
                         if sent_file.exists() else set())
-            id_pattern = LEGACY_ID if legacy_subject is not None else GENERIC_ID
             queued = [
                 p for p in sorted(queue_dir.glob("*.txt"))
-                if p.name != sent_file.name and id_pattern.fullmatch(p.stem)
+                if p.name != sent_file.name and GENERIC_ID.fullmatch(p.stem)
             ]
             if args.dry_run:
                 print(f"queue={queue_dir.name} queued={len(queued)} sent_ids={len(sent_ids)}")
@@ -110,7 +99,7 @@ def main():
                                 queue_dir.name, status_id)
                     continue
 
-                subject, body = parse_message(body_file, legacy_subject)
+                subject, body = parse_message(body_file)
                 if subject is None:
                     logger.warning("Malformed message (missing 'Subject:' line) retained "
                                    "queue=%s ID=%s", queue_dir.name, status_id)

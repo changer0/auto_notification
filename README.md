@@ -262,7 +262,6 @@ Subject: 邮件主题
 ```
 
 - `<id>`：1～64 位、字母数字开头、可含 `.`、`_`、`-` 的标识符，在同一队列内用于去重。
-- 兼容队列 `pending/thsottiaux_reset/` 沿用旧协议：文件为纯正文（无 Subject 行），文件名必须是 16～22 位纯数字的 X status ID，主题固定为「ChatGPT 额度重置通知 - @thsottiaux」。该队列服务于既有的 ChatGPT 定时任务，不要修改其协议。
 
 ### 工作逻辑
 
