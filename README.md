@@ -242,7 +242,12 @@ cat train.log | ./notify.py send -s "训练日志"
 
 ## 邮件补发队列（retry_queue）
 
-`retry_queue.py` 是部署在 Berry 上的通用补发工作程序：任何需要保证送达的邮件通知，发送方只需把正文写入 `pending/` 下的队列文件，实际投递由 Berry 的 cron 每 10 分钟驱动本程序完成。这样即使上游直接发送失败（网络抖动、工具调用失败等），只要正文已入队，邮件仍会被投出。整体语义是**至少一次投递 + 已发送 ID 去重**，不是严格的 exactly-once。前身 `retry_thsottiaux.py` 是专用于单一通知的版本，已由本程序取代。
+`retry_queue.py` 是部署在 Berry 上的通用补发工作程序，支持两种使用方式：
+
+- **失败兜底**：直接发送失败（网络抖动、工具调用失败等）的邮件，把内容写入队列等 Berry 重试；
+- **主动入队**：AI Agent 不执行 SMTP，直接把邮件（纯文本或 HTML）写入队列，由 Berry cron 每 10 分钟统一投递。
+
+整体语义是**至少一次投递 + 已发送 ID 去重**，不是严格的 exactly-once。
 
 ### 队列文件协议
 
@@ -250,26 +255,70 @@ cat train.log | ./notify.py send -s "训练日志"
 
 | 路径 | 作用 |
 | --- | --- |
-| `pending/<queue>/<id>.txt` | 待发消息文件，格式见下 |
+| `pending/<queue>/<id>.txt` | 待发消息文件（内容快照），格式见下 |
 | `pending/<queue>/sent_ids.txt` | 该队列已发送的 ID 台账，每行一个 |
 | `pending/.retry.lock` | 全局单实例运行锁（flock） |
 
-通用队列的消息文件格式——第一行必须是 Subject 行，其余全部是正文（UTF-8 纯文本）：
+纯文本消息——第一行 `Subject:`，其余为正文（UTF-8）：
 
 ```text
-Subject: 邮件主题
-（此后全部内容为正文）
+Subject: 普通通知
+这里是纯文本正文
 ```
 
-- `<id>`：1～64 位、字母数字开头、可含 `.`、`_`、`-` 的标识符，在同一队列内用于去重。
+HTML 消息——第二行为格式标识，第三行必须空行，其后为完整 HTML：
+
+```text
+Subject: HTML 模板通知
+X-Notify-Format: html
+
+<!doctype html>...</html>
+```
+
+- `<id>`：1～64 位、字母数字开头、可含 `.`、`_`、`-`，在同一队列内用于去重。
+- 格式标识只认 Subject 行后第二行的精确匹配 `X-Notify-Format: html`；正文其他位置出现相似文本不会误判。
+- 缺 `Subject:`、主题为空、格式标识后缺少空行、标识值无效、正文为空 → 一律视为**格式异常**：消息保留并记日志，不发送、不删除。
+- 队列文件是**内容快照**：HTML 消息保存最终渲染内容而非模板路径，模板后续修改不影响已入队邮件。
+
+### 生产者入队命令
+
+推荐用 `enqueue` 子命令入队（自动处理格式、去重、原子写入与读回校验），不直接手写文件：
+
+```bash
+# 纯文本
+./notify.py enqueue --queue task_reports --id run-42 -s "任务完成" -b "loss=0.05"
+
+# HTML（复制模板并替换示例内容后入队）
+./notify.py enqueue --queue task_reports --id run-43 -s "报告" --html-file report.html
+```
+
+- 队列名 1～64 位（字母数字开头，可含 `-` `_`）；ID 1～64 位（可含 `.` `_` `-`）。
+- 正文纯文本或 HTML 二选一；同一 ID 已入队（文件存在）或已发送（在 `sent_ids.txt` 中）时拒绝，退出码 2。
+- 写入流程：临时文件（`.tmp-` 前缀，消费者按 ID 规则扫描不会读取）→ `fsync` → `os.link` 原子落位（并发提交同一 ID 只有一个成功）→ 读回校验。
+- 命令不连接 SMTP；**入队成功不等于发送成功**。
+
+### HTML 投递逻辑
+
+消费者对 HTML 消息复用 `notify.py send --html-file` 投递，由 `notify.py` 构建标准 MIME：`multipart/alternative`，`text/plain` 为从 HTML 提取的纯文本回退（提取失败时用固定提示句），`text/html` 为队列快照原文。HTML 原文经临时文件传递、纯文本经标准输入传递，均不进入命令行参数。
 
 ### 工作逻辑
 
-1. 扫描 `pending/` 下所有合法队列目录；只处理文件名符合该队列 ID 规则的 `*.txt`，跳过 `sent_ids.txt`。
-2. 已发送过的 ID 直接清理对应文件；写入不足 30 秒的文件本轮暂缓，避免读到写了一半的正文；缺 `Subject:` 行、主题为空或正文为空的文件保留并记日志。
-3. 通过 `subprocess.run` 参数数组调用 `notify.py send`，正文经标准输入传递，不拼 shell 命令，也不执行正文中的内容；单封发送超时 60 秒。
+1. 扫描 `pending/` 下所有合法队列目录；只处理文件名符合 ID 规则的 `*.txt`，跳过 `sent_ids.txt` 和 `.tmp-` 临时文件。
+2. 已发送过的 ID 直接清理对应文件；写入不足 30 秒的文件本轮暂缓；格式异常的消息保留并记日志。
+3. 调用 `notify.py send` 投递；单封发送超时 60 秒。超时视为**结果不确定**（SMTP 可能已接受），消息保留，重试可能造成重复投递。
 4. 退出码为 0 且标准输出包含「已发送至」才确认成功；成功后先把 ID 追加进该队列的 `sent_ids.txt` 并 `fsync`，再删除消息文件。失败则保留文件，等下一轮重试。
 5. `flock` 全局防并发，每个队列单次最多处理 10 个文件；日志写入自动轮转的 `retry_queue.log`。
+
+### 消息状态对照
+
+| 状态 | 判定方式 |
+| --- | --- |
+| 已入队 | `enqueue` 输出「已入队（未发送）」且读回校验通过 |
+| 待发送 | 消息文件在队列目录中，尚未被消费者成功处理 |
+| 已发送 | ID 出现在该队列 `sent_ids.txt`，日志含 `Delivery confirmed` |
+| 发送失败 | 日志含 `Delivery not confirmed`（明确失败）或 `Delivery not attempted`（未能发起） |
+| 结果不确定 | 日志含 `Delivery outcome unknown (timeout)`；SMTP 可能已接受，禁止立即重发 |
+| 格式异常 | 日志含 `Format error retained`，消息保留待人工处理 |
 
 ### Cron 部署
 
@@ -287,15 +336,26 @@ Subject: 邮件主题
 
 ```bash
 cd /home/berry/auto_notification
-python3 retry_queue.py --dry-run   # 检查所有队列，不发送
+python3 retry_queue.py --dry-run   # 检查所有队列（显示每条消息格式/格式异常），不发送
 tail -n 50 retry_queue.log         # 查看补发日志
 crontab -l | grep email-retry-queue
 ```
+
+### 测试
+
+本机运行完整测试（全部 Mock，不连接 SMTP/IMAP、不读写真实队列）：
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+覆盖：协议解析边界、入队去重与并发、消费者投递/失败/超时/格式异常、MIME 构造、模板快照隔离、PRD 验收场景。
 
 ### 故障边界
 
 - SMTP 成功但 `sent_ids.txt` 写入完成前进程异常时，理论上可能重发一次；本机制是至少一次 + 去重，不保证 exactly-once。
 - SMTP 持续失败时会每 10 分钟无限重试，目前没有最大重试次数、死信队列或独立告警；必要时需人工检查队列与日志。
+- 发送超时的消息按结果不确定处理：保留重试，可能造成重复投递；生产侧不得因「不确定」而立即再发同一邮件。
 - 若生产者连队列文件都无法写入，通知不会凭空产生，上游任务必须如实报告「未入队」。
 - 本机制仅用于降低正常发送偶发失败的影响，不能用来绕过平台明确的安全限制。
 

@@ -13,6 +13,7 @@ notify —— 邮件通知 CLI 工具（纯 Python 标准库，零第三方依�
     notify config show                 # 查看当前生效配置（密码打码）
     notify test                        # 发一封测试邮件验证配置
     notify send -s "标题" -b "内容"     # 发送通知
+    notify enqueue --queue q --id m1 -s "标题" --html-file mail.html   # 只入队不发送
     notify receive --limit 10           # 通过 IMAP 查看最近邮件
 
 退出码:
@@ -31,11 +32,13 @@ import imaplib
 import math
 import mimetypes
 import os
+import re
 import smtplib
 import socket
 import sys
 import time
 import unicodedata
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from email.message import EmailMessage
@@ -44,7 +47,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 PROG = "notify"
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 
 EXIT_OK = 0
 EXIT_SEND_FAILED = 1
@@ -52,6 +55,15 @@ EXIT_CONFIG_ERROR = 2
 EXIT_TIMEOUT = 3
 
 DEFAULT_CONFIG_PATH = Path.home() / ".notify" / "config.ini"
+
+# ---------------------------------------------------------------------------
+# 补发队列协议（与 retry_queue.py 保持一致，测试中有交叉校验）
+# ---------------------------------------------------------------------------
+
+QUEUE_ROOT = Path(__file__).resolve().parent / "pending"
+QUEUE_NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}")
+QUEUE_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
+QUEUE_FORMAT_HEADER = "X-Notify-Format: html"
 
 # ---------------------------------------------------------------------------
 # 配置定义
@@ -817,6 +829,94 @@ def cmd_send(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_enqueue(args: argparse.Namespace) -> int:
+    """把一封邮件以内容快照写入持久化补发队列（不连接 SMTP）。"""
+    queue, msg_id = args.queue.strip(), args.id.strip()
+    if not QUEUE_NAME_RE.fullmatch(queue):
+        die(EXIT_CONFIG_ERROR, "队列名非法：须为 1~64 位、以字母数字开头，可含 - 和 _")
+    if not QUEUE_ID_RE.fullmatch(msg_id):
+        die(EXIT_CONFIG_ERROR, "消息 ID 非法：须为 1~64 位、以字母数字开头，可含 . _ -")
+
+    subject = args.subject.strip()
+    if not subject:
+        die(EXIT_CONFIG_ERROR, "主题不能为空")
+    if "\n" in subject:
+        die(EXIT_CONFIG_ERROR, "主题不能包含换行（协议规定主题只占首行）")
+
+    text = args.body or ""
+    if args.body_file:
+        p = Path(args.body_file).expanduser()
+        if not p.is_file():
+            die(EXIT_CONFIG_ERROR, f"文件不存在: {p}")
+        text = (text + "\n" if text else "") + p.read_text(encoding="utf-8")
+    if not text:
+        text = read_stdin_if_piped()
+
+    html = args.html or ""
+    if args.html_file:
+        p = Path(args.html_file).expanduser()
+        if not p.is_file():
+            die(EXIT_CONFIG_ERROR, f"文件不存在: {p}")
+        html = p.read_text(encoding="utf-8")
+
+    if text.strip() and html.strip():
+        die(EXIT_CONFIG_ERROR, "纯文本与 HTML 正文只能提供一种")
+    if html.strip():
+        fmt = "html"
+        body = html.rstrip("\n")
+        content = f"Subject: {subject}\n{QUEUE_FORMAT_HEADER}\n\n{body}\n"
+    elif text.strip():
+        fmt = "text"
+        body = text.rstrip("\n")
+        content = f"Subject: {subject}\n{body}\n"
+    else:
+        die(EXIT_CONFIG_ERROR,
+            "正文为空：请用 --body / --body-file / --html / --html-file 或管道提供内容")
+
+    queue_dir = QUEUE_ROOT / queue
+    queue_dir.mkdir(parents=True, exist_ok=True)
+    final = queue_dir / f"{msg_id}.txt"
+
+    # 去重：待发消息已存在，或该 ID 已成功发送过，都拒绝再次入队。
+    if final.exists():
+        die(EXIT_CONFIG_ERROR, f"消息 {msg_id} 已存在于队列 {queue}，同一 ID 只能对应一条通知")
+    sent_file = queue_dir / "sent_ids.txt"
+    if sent_file.exists() and msg_id in sent_file.read_text(encoding="utf-8").splitlines():
+        die(EXIT_CONFIG_ERROR, f"消息 {msg_id} 已发送过，禁止重复入队")
+
+    # 先写临时文件（消费者按 ID 规则扫描，点开头的临时名不会被读取），
+    # fsync 后用 os.link 原子落位：并发提交同一 ID 时只有一个成功。
+    tmp = queue_dir / f".tmp-{msg_id}-{os.getpid()}-{uuid.uuid4().hex[:8]}.txt"
+    try:
+        with tmp.open("w", encoding="utf-8") as f:
+            f.write(content)
+            f.flush()
+            os.fsync(f.fileno())
+        try:
+            os.link(tmp, final)
+        except FileExistsError:
+            die(EXIT_CONFIG_ERROR, f"并发冲突：消息 {msg_id} 已被其他提交占用")
+    finally:
+        tmp.unlink(missing_ok=True)
+    try:
+        dir_fd = os.open(queue_dir, os.O_RDONLY)
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
+    except OSError:
+        pass  # 目录 fsync 属加固项，失败不影响已 fsync 的消息文件
+
+    if final.read_text(encoding="utf-8") != content:
+        final.unlink(missing_ok=True)
+        die(EXIT_CONFIG_ERROR, f"入队校验失败：{final} 内容与预期不一致，已移除")
+
+    print(f"✔ 已入队（未发送） 队列={queue} ID={msg_id} 格式={fmt}")
+    print(f"  文件: {final}")
+    print("  投递由 Berry 的 retry_queue.py 定时任务负责；入队成功不等于发送成功。")
+    return EXIT_OK
+
+
 def cmd_test(args: argparse.Namespace) -> int:
     opts, cfg_path, missing = load_options(getattr(args, "config", None))
     if missing:
@@ -938,6 +1038,7 @@ def build_parser() -> argparse.ArgumentParser:
             '  notify send -s "附件" -b "见附件" -a a.pdf -a b.zip\n'
             '  notify send -s "多人" -b "hi" -t a@x.com,b@y.com --cc c@z.com\n'
             '  notify receive --limit 5                   # 收取最近 5 封邮件\n'
+            '  notify enqueue --queue q --id m1 -s "标题" --html-file m.html  # 入队不发送\n'
             '  notify receive --unseen --mark-seen         # 读取未读邮件并标为已读\n'
             '  notify watch --once --timeout 1800          # 等待新邮件，最长 30 分钟\n'
             "  notify --config /tmp/other.ini send -s hi -b hi   # 临时换配置"
@@ -975,6 +1076,30 @@ def build_parser() -> argparse.ArgumentParser:
     p_send.add_argument("-a", "--attach", action="append", metavar="FILE",
                         help="附件路径，可多次使用")
     p_send.set_defaults(func=cmd_send)
+
+    # ---- enqueue ----
+    p_enqueue = sub.add_parser(
+        "enqueue", parents=[common], formatter_class=argparse.RawDescriptionHelpFormatter,
+        help="写入持久化补发队列（不发送邮件）",
+        description="把一封邮件以内容快照写入 pending/ 队列，由 Berry 的 retry_queue.py 定时投递。"
+                    "本命令不连接 SMTP；入队成功不等于发送成功。",
+        epilog=(
+            "示例:\n"
+            '  notify enqueue --queue task_reports --id run-42 -s "任务完成" -b "loss=0.05"\n'
+            '  notify enqueue --queue task_reports --id run-43 -s "报告" --html-file report.html\n'
+            "规则: 队列名 1~64 位（字母数字开头，可含 - _）；ID 1~64 位（可含 . _ -）；"
+            "正文纯文本或 HTML 二选一；同一 ID 已入队或已发送时拒绝。"
+        ),
+    )
+    p_enqueue.add_argument("--queue", required=True, metavar="NAME",
+                           help="队列名（pending/ 下的子目录名）")
+    p_enqueue.add_argument("--id", required=True, metavar="ID", help="消息 ID，同一队列内唯一")
+    p_enqueue.add_argument("-s", "--subject", required=True, help="邮件主题（写入消息首行）")
+    p_enqueue.add_argument("-b", "--body", help="纯文本正文（也可通过管道/文件传入）")
+    p_enqueue.add_argument("--body-file", metavar="FILE", help="从文件读取纯文本正文")
+    p_enqueue.add_argument("--html", help="HTML 正文（直接给内容）")
+    p_enqueue.add_argument("--html-file", metavar="FILE", help="从文件读取 HTML 正文")
+    p_enqueue.set_defaults(func=cmd_enqueue)
 
     # ---- test ----
     p_test = sub.add_parser(

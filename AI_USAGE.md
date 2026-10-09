@@ -42,8 +42,8 @@ HTML 邮件优先使用 `templates/` 下的预置模板（均按手机端阅读�
 
 使用规则：
 
-1. 模板内是示例占位内容。正式通知必须先复制模板、替换为实际内容，再发送；禁止将示例内容原样发给用户。
-2. 发送方式与普通 HTML 正文相同：`./notify.py send -s "主题" --html-file 改写后的文件.html`。
+1. 模板内是示例占位内容。正式通知必须先复制模板、替换为实际内容，再发送或入队；禁止将示例内容原样发给用户。
+2. 直发：`./notify.py send -s "主题" --html-file 改写后的文件.html`；入队：`./notify.py enqueue --queue <队列> --id <ID> -s "主题" --html-file 改写后的文件.html`。
 3. 预览全部风格用 `templates/template-showcase.html`，该文件不用于发送。
 
 ## 4. 接收与监听
@@ -78,44 +78,79 @@ HTML 邮件优先使用 `templates/` 下的预置模板（均按手机端阅读�
 - 退出码 `0` 只表示 SMTP 已接受，不保证已进入收件箱；向用户表述用「已提交发送」。
 - 任何情况下，命令失败时禁止向用户声称已发送。
 
-## 6. 邮件补发队列（发送失败的通用兜底）
+## 6. 邮件补发队列与主动入队
 
-任何邮件直发失败（退出码 1）或发送调用无法发起时，标准处置是入队：把消息写入 Berry 的补发队列，由 Berry cron 每 10 分钟自动重试，而不是自行重发。
+队列支持两种模式：
 
-### 入队协议
+- **模式 A（直接发送失败兜底）**：`send` 明确失败（退出码 1）时，把邮件内容写入队列等 Berry 重试。
+- **模式 B（主动入队，推荐给重要通知）**：不执行 SMTP，直接把邮件（纯文本或 HTML 模板）入队，由 Berry cron 统一投递。入队后禁止再直接发送同一邮件；入队成功不等于发送成功。
 
-1. 目标文件：`/home/berry/auto_notification/pending/<queue>/<id>.txt`
-2. `<queue>`：队列名，1～64 位、字母数字开头，可含 `-`、`_`；按通知类别命名（如 `server_alerts`、`task_reports`）。
-3. 文件内容：第一行必须是 `Subject: 邮件主题`，其后全部内容为正文（UTF-8 纯文本）。
-4. `<id>`：1～64 位、字母数字开头，可含 `.`、`_`、`-`；同一队列内唯一，用于去重。
-5. 写入前先检查：该 ID 已在该队列目录或其 `sent_ids.txt` 中时，禁止再次写入。
-6. 写入后必须读回核对（Subject 行与正文完整），然后才报告「已入队」。
+### 标准入队命令（优先使用）
 
-### 操作流程（发送失败时）
+```bash
+# 纯文本
+./notify.py enqueue --queue task_reports --id run-42 -s "任务完成" -b "loss=0.05"
 
-1. 直发失败或发送调用无法发起 → 按上述协议构造队列文件。
-2. 去重、写入、读回校验。
-3. 报告「已入队，Berry 每 10 分钟自动重试」；入队成功即视为本轮通知任务完成。
-4. 后续投递由 cron 完成；禁止再手动调用 `notify.py` 或 `retry_queue.py` 发送同一通知。
+# HTML：先按第 3 节复制模板并替换示例内容，再入队
+./notify.py enqueue --queue task_reports --id run-43 -s "报告" --html-file report.html
+```
+
+规则：
+
+1. `<queue>`：1～64 位、字母数字开头，可含 `-`、`_`；按通知类别命名（如 `server_alerts`、`task_reports`）。
+2. `<id>`：1～64 位、字母数字开头，可含 `.`、`_`、`-`；同一队列内唯一。使用可读且唯一的 ID（如 `run-42`、`deploy-20261009-001`）。
+3. 正文纯文本或 HTML 二选一，不得为空。
+4. 同一 ID 已入队或已发送（在该队列 `sent_ids.txt` 中）时，命令拒绝并退出码 2；此时不得改换 ID 重复提交同一内容。
+5. 命令成功输出「已入队（未发送）」即完成本方职责；据此向用户报告，禁止声称已发送。
+
+### 手写队列文件（仅当 enqueue 命令不可用时）
+
+路径：`/home/berry/auto_notification/pending/<queue>/<id>.txt`，格式二选一：
+
+```text
+Subject: 主题
+纯文本正文
+```
+
+```text
+Subject: 主题
+X-Notify-Format: html
+
+<!doctype html>…（完整 HTML，注意标识行后必须空行）
+```
+
+必须：写入前查重（文件已存在或 ID 在 `sent_ids.txt` 中则不写）；先写 `.tmp-` 前缀临时文件再改名；写入后读回核对。格式错误的文件会被消费者判为格式异常而滞留，不会发送。
+
+### 发送状态与处置
+
+| 状态 | 判定 | 处置 |
+| --- | --- | --- |
+| 已入队 | enqueue 输出确认 | 向用户报告「已入队，Berry 每 10 分钟自动投递」 |
+| 待发送 | 消息在队列中 | 无需干预 |
+| 已发送 | ID 在 `sent_ids.txt`，日志 `Delivery confirmed` | 报告成功 |
+| 发送失败 | 日志 `Delivery not confirmed` / `not attempted` | 保留待下轮自动重试；持续失败报告用户 |
+| 结果不确定 | 日志 `Delivery outcome unknown (timeout)` | **禁止立即重发或重复入队**（可能造成重复投递），如实报告，由用户决定 |
+| 格式异常 | 日志 `Format error retained` | 报告用户人工修正文件 |
+
+直发（`send`）超时同样属于结果不确定：不得自动重发，不得对结果不确定的邮件改换 ID 入队。
 
 ### 补发结果排查
 
 ```bash
-# 所有队列当前状态（只读，不发送）
+# 所有队列当前状态（只读，不发送；显示每条消息格式/格式异常）
 ssh berry "cd /home/berry/auto_notification && python3 retry_queue.py --dry-run"
-# 消费者日志：投递成功 / 失败 / 暂缓记录
+# 消费者日志
 ssh berry "tail -n 50 /home/berry/auto_notification/retry_queue.log"
 # 某队列已发送 ID 台账
 ssh berry "cat /home/berry/auto_notification/pending/<queue>/sent_ids.txt"
 ```
 
-判定标准：ID 出现在该队列 `sent_ids.txt` 且日志含 `Delivery confirmed`，即已投递；文件持续留在队列且日志反复出现 `Delivery not confirmed`，说明 SMTP 持续失败，应报告用户人工介入。
-
 ### 禁止
 
 - 入队后禁止再直接调用 `notify.py send` 发送该通知。
-- 禁止创建、修改或清理任何 `sent_ids.txt` 及 `pending/` 内已有文件。
+- 禁止创建、修改或清理任何 `sent_ids.txt` 及 `pending/` 内已有文件（查重只读除外）。
 - 消费者只在 Berry 运行；禁止在其他主机运行 `retry_queue.py` 实发。
+- 禁止把邮件正文/HTML 拼进 shell 命令字符串；一律通过 `enqueue` 命令或 `send` 的参数/标准输入传递。
 
 ## 7. 硬性禁止（全局）
 
