@@ -616,7 +616,7 @@ def format_message_date(value: str | None) -> str:
 
 
 def encode_imap_mailbox(name: str) -> str:
-    """按 IMAP modified UTF-7 编码文件夹名中的非 ASCII 字符。"""
+    """按 IMAP modified UTF-7 编码文件夹名，并加引号以支持含空格的名字。"""
     out: list[str] = []
     encoded_run: list[str] = []
 
@@ -637,7 +637,8 @@ def encode_imap_mailbox(name: str) -> str:
         else:
             encoded_run.append(char)
     flush()
-    return "".join(out)
+    quoted = "".join(out).replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{quoted}"'
 
 
 def cmd_receive(args: argparse.Namespace) -> int:
