@@ -23,7 +23,7 @@ ssh "$REMOTE_HOST" "mkdir -p -- '$REMOTE_DIR'"
 # 不删除远端文件；保留 berry 上的本地配置、运行日志和专用脚本。
 rsync -av \
     --exclude='/.git/' \
-    --exclude='/__pycache__/' \
+    --exclude='__pycache__/' \
     --exclude='/.video_agent/' \
     --exclude='/.zcodeignore' \
     --exclude='/pending/' \
