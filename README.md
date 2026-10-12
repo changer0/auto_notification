@@ -1,5 +1,9 @@
 # notify
 
+邮件MCP插件与外部执行器共用 `email_service/service.py`：schema、模板渲染、发送回执和发送请求账本均只有一个实现。`read_email_instructions`由同一规范按服务端确定的mcp/executor环境生成，返回实际可用工具和版本；外部执行器不继承ChatGPT连接，也不提供IMAP读取。
+
+`email_service/local_tools.py`提供所有者专用Unix入口，socket位于邮件服务状态目录的 `tools.sock`，权限0600并核验peer UID。该入口不要求复制OAuth令牌；传入JSON仅有action/tool/arguments，不能伪造身份或选择mcp环境。执行器调用的是邮件服务，不是ChatGPT插件；所有发送仍经过同一业务校验和幂等账本。
+
 `notify` 是一个基于 Python 标准库的邮件命令行工具，适合在脚本、定时任务和训练任务结束时发送邮件，也可以通过 IMAP 接收并查看邮件。发送支持纯文本、HTML、附件、管道输入、多收件人和抄送；接收支持查看正文、筛选未读邮件和保存附件，不需要安装第三方 Python 包。
 
 > 面向 AI Agent 的操作手册（命令速查、退出码处理、队列入队规则）见 [AI_USAGE.md](AI_USAGE.md)。

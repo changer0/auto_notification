@@ -10,6 +10,7 @@ from urllib.parse import urlencode
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "email_service"))
 import server
+from email_service import service
 from oauth_server import OAuthServer, MCP_RESOURCE
 
 
@@ -38,7 +39,7 @@ class MailMCPTests(unittest.TestCase):
 
     def test_delivery_id_prevents_resend_and_rejects_changed_content(self):
         args = {"subject": "Test", "body": "Body", "request_id": "test-1"}
-        with patch.object(server, "MCP_OAUTH_STATE_FILE", self.state), patch.object(server.notify, "load_options", return_value=([], None, [])), patch.object(server.notify, "build_message", return_value=(object(), ["test@example.com"])), patch.object(server.notify, "send_message") as send:
+        with patch.object(service, "MCP_OAUTH_STATE_FILE", self.state), patch.object(server.notify, "load_options", return_value=([], None, [])), patch.object(server.notify, "build_message", return_value=(object(), ["test@example.com"])), patch.object(server.notify, "send_message") as send:
             self.assertEqual(server.execute("send_email", args)["status"], "submitted")
             self.assertEqual(server.execute("send_email", args)["status"], "submitted")
             send.assert_called_once()
@@ -47,7 +48,7 @@ class MailMCPTests(unittest.TestCase):
 
     def test_unknown_delivery_is_not_retried(self):
         args = {"subject": "Test", "body": "Body", "request_id": "test-2"}
-        with patch.object(server, "MCP_OAUTH_STATE_FILE", self.state), patch.object(server.notify, "load_options", return_value=([], None, [])), patch.object(server.notify, "build_message", return_value=(object(), [])), patch.object(server.notify, "send_message", side_effect=TimeoutError) as send:
+        with patch.object(service, "MCP_OAUTH_STATE_FILE", self.state), patch.object(server.notify, "load_options", return_value=([], None, [])), patch.object(server.notify, "build_message", return_value=(object(), [])), patch.object(server.notify, "send_message", side_effect=TimeoutError) as send:
             self.assertEqual(server.execute("send_email", args)["status"], "unknown")
             self.assertEqual(server.execute("send_email", args)["status"], "unknown")
             send.assert_called_once()
@@ -101,7 +102,7 @@ class MailMCPTests(unittest.TestCase):
 
     def test_each_template_send_uses_rendered_html(self):
         for name in server.TEMPLATE_NAMES:
-            with self.subTest(template=name), patch.object(server, "MCP_OAUTH_STATE_FILE", self.state), patch.object(server.notify, "load_options", return_value=([], None, [])), patch.object(server.notify, "build_message", return_value=(object(), [])) as build, patch.object(server.notify, "send_message"):
+            with self.subTest(template=name), patch.object(service, "MCP_OAUTH_STATE_FILE", self.state), patch.object(server.notify, "load_options", return_value=([], None, [])), patch.object(server.notify, "build_message", return_value=(object(), [])) as build, patch.object(server.notify, "send_message"):
                 server.execute("send_email", {"subject": "主题", "body": "正文", "format": name, "request_id": "send-" + name})
                 self.assertEqual(build.call_args.kwargs["html"], server.render_template(name, "主题", "正文"))
                 self.assertEqual(build.call_args.kwargs["text"], "正文")
