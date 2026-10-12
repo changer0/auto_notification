@@ -5,8 +5,11 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="x-apple-disable-message-reformatting">
   <meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
   <title>极简邮件模板</title>
   <style>
+    :root{color-scheme:light dark;supported-color-schemes:light dark}
     body{margin:0!important;padding:0!important;background:#ffffff!important;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}
     table{border-spacing:0;border-collapse:collapse}
     .shell{width:700px;max-width:700px}
@@ -19,40 +22,55 @@
       .data th,.data td{padding:9px 7px!important;font-size:12px!important}
       .button{display:block!important;text-align:center!important;padding:13px 18px!important}
     }
+
+    /* Paired dark colors; no fixed text-fill so client inversion can still work. */
+    @media (prefers-color-scheme: dark){
+      body{background:#11151c!important;color:#edf2f7!important;}
+      .dm-muted{color:#b8c2d1!important;}
+      .dm-panel{background:#232a35!important;}
+      .dm-surface{background:#181c23!important;}
+      .dm-text{color:#edf2f7!important;}
+      a:not(.button){color:#93c5fd!important;}
+    }
+    [data-ogsc] .dm-muted{color:#b8c2d1!important;}
+    [data-ogsc] .dm-panel{background:#232a35!important;}
+    [data-ogsc] .dm-surface{background:#181c23!important;}
+    [data-ogsc] .dm-text{color:#edf2f7!important;}
+    [data-ogsc] a:not(.button){color:#93c5fd!important;}
   </style>
 </head>
-<body bgcolor="#ffffff" style="margin:0;padding:0;background:#ffffff!important;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="width:100%;background:#ffffff!important;">
+<body bgcolor="#ffffff" class="dm-surface" style="margin:0;padding:0;background:#ffffff;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" class="dm-surface" style="width:100%;background:#ffffff;">
     <tr><td align="center">
-      <table role="presentation" class="shell" width="700" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="width:700px;max-width:700px;background:#ffffff!important;">
-        <tr><td class="px top" style="padding:44px 26px 36px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC',Arial,sans-serif;color:#222222!important;-webkit-text-fill-color:#222222;font-size:15px;line-height:1.75;">
-          <h1 class="title" style="margin:0 0 8px;font-size:30px;line-height:1.25;color:#222222!important;-webkit-text-fill-color:#222222;">极简通知标题</h1>
-          <div style="margin-bottom:30px;font-size:13px;color:#777777!important;-webkit-text-fill-color:#777777;">2026-10-06 · 自动通知</div>
-          <p style="margin:0 0 14px;color:#222222!important;-webkit-text-fill-color:#222222;">这是正文示例。该模板强调纯文本观感，适合日常通知、简短汇报和任务结果。</p>
-          <h2 style="margin:30px 0 10px;font-size:22px;color:#222222!important;-webkit-text-fill-color:#222222;">二级标题</h2><p style="margin:0 0 14px;color:#222222!important;-webkit-text-fill-color:#222222;">用于主要分区。</p>
-          <h3 style="margin:22px 0 8px;font-size:18px;color:#222222!important;-webkit-text-fill-color:#222222;">三级标题</h3><p style="margin:0 0 14px;color:#222222!important;-webkit-text-fill-color:#222222;">用于子主题。</p>
-          <h4 style="margin:18px 0 6px;font-size:16px;color:#222222!important;-webkit-text-fill-color:#222222;">四级标题</h4><p style="margin:0 0 20px;color:#777777!important;-webkit-text-fill-color:#777777;">用于补充说明。</p>
+      <table role="presentation" class="shell dm-surface" width="700" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="width:700px;max-width:700px;background:#ffffff;">
+        <tr><td class="px top dm-text" style="padding:44px 26px 36px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC',Arial,sans-serif;color:#222222;font-size:15px;line-height:1.75;">
+          <h1 class="title dm-text" style="margin:0 0 8px;font-size:30px;line-height:1.25;color:#222222;">极简通知标题</h1>
+          <div class="dm-muted" style="margin-bottom:30px;font-size:13px;color:#737373;">2026-10-06 · 自动通知</div>
+          <p class="dm-text" style="margin:0 0 14px;color:#222222;">这是正文示例。该模板强调纯文本观感，适合日常通知、简短汇报和任务结果。</p>
+          <h2 class="dm-text" style="margin:30px 0 10px;font-size:22px;color:#222222;">二级标题</h2><p class="dm-text" style="margin:0 0 14px;color:#222222;">用于主要分区。</p>
+          <h3 class="dm-text" style="margin:22px 0 8px;font-size:18px;color:#222222;">三级标题</h3><p class="dm-text" style="margin:0 0 14px;color:#222222;">用于子主题。</p>
+          <h4 class="dm-text" style="margin:18px 0 6px;font-size:16px;color:#222222;">四级标题</h4><p class="dm-muted" style="margin:0 0 20px;color:#737373;">用于补充说明。</p>
 
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;margin:20px 0;">
-            <tr><td style="padding:9px 0 9px 16px;border-left:4px solid #222222;color:#444444!important;-webkit-text-fill-color:#444444;"><strong>重点：</strong>这里放需要快速扫读的核心结论。</td></tr>
+            <tr><td class="dm-text" style="padding:9px 0 9px 16px;border-left:4px solid #222222;color:#444444;"><strong>重点：</strong>这里放需要快速扫读的核心结论。</td></tr>
           </table>
 
-          <h2 style="margin:30px 0 10px;font-size:22px;color:#222222!important;-webkit-text-fill-color:#222222;">列表</h2>
-          <ul style="margin:0 0 26px;padding-left:22px;color:#222222!important;-webkit-text-fill-color:#222222;"><li style="margin:5px 0;">信息一</li><li style="margin:5px 0;">信息二</li><li style="margin:5px 0;">信息三</li></ul>
+          <h2 class="dm-text" style="margin:30px 0 10px;font-size:22px;color:#222222;">列表</h2>
+          <ul class="dm-text" style="margin:0 0 26px;padding-left:22px;color:#222222;"><li style="margin:5px 0;">信息一</li><li style="margin:5px 0;">信息二</li><li style="margin:5px 0;">信息三</li></ul>
 
-          <h2 style="margin:30px 0 10px;font-size:22px;color:#222222!important;-webkit-text-fill-color:#222222;">表格</h2>
+          <h2 class="dm-text" style="margin:30px 0 10px;font-size:22px;color:#222222;">表格</h2>
           <table class="data" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;table-layout:fixed;border-collapse:collapse;margin:0 0 26px;font-size:14px;">
-            <tr><th bgcolor="#f7f7f7" style="padding:10px;border:1px solid #dddddd;background:#f7f7f7!important;text-align:left;color:#222222!important;-webkit-text-fill-color:#222222;">事项</th><th bgcolor="#f7f7f7" style="padding:10px;border:1px solid #dddddd;background:#f7f7f7!important;text-align:left;color:#222222!important;-webkit-text-fill-color:#222222;">结果</th><th bgcolor="#f7f7f7" style="padding:10px;border:1px solid #dddddd;background:#f7f7f7!important;text-align:left;color:#222222!important;-webkit-text-fill-color:#222222;">备注</th></tr>
-            <tr><td style="padding:10px;border:1px solid #dddddd;color:#222222!important;-webkit-text-fill-color:#222222;word-break:break-word;">检查项 A</td><td style="padding:10px;border:1px solid #dddddd;color:#222222!important;-webkit-text-fill-color:#222222;">通过</td><td style="padding:10px;border:1px solid #dddddd;color:#222222!important;-webkit-text-fill-color:#222222;word-break:break-word;">无异常</td></tr>
-            <tr><td style="padding:10px;border:1px solid #dddddd;color:#222222!important;-webkit-text-fill-color:#222222;">检查项 B</td><td style="padding:10px;border:1px solid #dddddd;color:#222222!important;-webkit-text-fill-color:#222222;">待确认</td><td style="padding:10px;border:1px solid #dddddd;color:#222222!important;-webkit-text-fill-color:#222222;word-break:break-word;">需人工复核</td></tr>
+            <tr><th bgcolor="#f7f7f7" class="dm-panel dm-text" style="padding:10px;border:1px solid #dddddd;background:#f7f7f7;text-align:left;color:#222222;">事项</th><th bgcolor="#f7f7f7" class="dm-panel dm-text" style="padding:10px;border:1px solid #dddddd;background:#f7f7f7;text-align:left;color:#222222;">结果</th><th bgcolor="#f7f7f7" class="dm-panel dm-text" style="padding:10px;border:1px solid #dddddd;background:#f7f7f7;text-align:left;color:#222222;">备注</th></tr>
+            <tr><td class="dm-text" style="padding:10px;border:1px solid #dddddd;color:#222222;word-break:break-word;">检查项 A</td><td class="dm-text" style="padding:10px;border:1px solid #dddddd;color:#222222;">通过</td><td class="dm-text" style="padding:10px;border:1px solid #dddddd;color:#222222;word-break:break-word;">无异常</td></tr>
+            <tr><td class="dm-text" style="padding:10px;border:1px solid #dddddd;color:#222222;">检查项 B</td><td class="dm-text" style="padding:10px;border:1px solid #dddddd;color:#222222;">待确认</td><td class="dm-text" style="padding:10px;border:1px solid #dddddd;color:#222222;word-break:break-word;">需人工复核</td></tr>
           </table>
 
-          <h2 style="margin:30px 0 10px;font-size:22px;color:#222222!important;-webkit-text-fill-color:#222222;">代码</h2>
-          <div style="margin:0 0 26px;padding:14px;background:#f6f6f6!important;border:1px solid #e7e7e7;border-radius:8px;font-family:Consolas,'Courier New',monospace;font-size:13px;line-height:1.65;color:#222222!important;-webkit-text-fill-color:#222222;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;">status = "ok"
+          <h2 class="dm-text" style="margin:30px 0 10px;font-size:22px;color:#222222;">代码</h2>
+          <div class="dm-panel dm-text" style="margin:0 0 26px;padding:14px;background:#f6f6f6;border:1px solid #e7e7e7;border-radius:8px;font-family:Consolas,'Courier New',monospace;font-size:13px;line-height:1.65;color:#222222;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;">status = "ok"
 print(status)</div>
-          <a class="button" href="https://example.com" style="display:inline-block;padding:12px 18px;background:#222222!important;border-radius:6px;font-weight:600;color:#ffffff!important;-webkit-text-fill-color:#ffffff;text-decoration:none;">查看详情</a>
+          <a class="button" href="https://example.com" style="display:inline-block;padding:12px 18px;background:#222222;border-radius:6px;font-weight:600;color:#ffffff;text-decoration:none;">查看详情</a>
         </td></tr>
-        <tr><td class="px" style="padding:18px 26px 26px;border-top:1px solid #e8e8e8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC',Arial,sans-serif;font-size:12px;color:#888888!important;-webkit-text-fill-color:#888888;">自动生成 · 仅供通知使用</td></tr>
+        <tr><td class="px dm-muted" style="padding:18px 26px 26px;border-top:1px solid #e8e8e8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC',Arial,sans-serif;font-size:12px;color:#737373;">自动生成 · 仅供通知使用</td></tr>
       </table>
     </td></tr>
   </table>

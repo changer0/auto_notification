@@ -84,6 +84,21 @@ class MailMCPTests(unittest.TestCase):
                     self.assertNotIn(sample, rendered)
                 self.assertEqual(rendered.count("<td"), rendered.count("</td>"))
 
+    def test_templates_support_dark_mode_without_locked_text_fill(self):
+        for name in server.TEMPLATE_NAMES:
+            with self.subTest(template=name):
+                rendered = server.render_template(name, "夜间通知", "正文与长链接")
+                self.assertNotIn("-webkit-text-fill-color", rendered)
+                self.assertIn('name="color-scheme"', rendered)
+                self.assertIn("prefers-color-scheme: dark", rendered)
+                self.assertIn("[data-ogsc]", rendered)
+                if name != "dark-tech":
+                    self.assertIn("dm-surface", rendered)
+                    self.assertIn("dm-text", rendered)
+                    self.assertIn("color:#edf2f7!important", rendered)
+                self.assertIn("夜间通知", rendered)
+                self.assertIn("正文与长链接", rendered)
+
     def test_each_template_send_uses_rendered_html(self):
         for name in server.TEMPLATE_NAMES:
             with self.subTest(template=name), patch.object(server, "MCP_OAUTH_STATE_FILE", self.state), patch.object(server.notify, "load_options", return_value=([], None, [])), patch.object(server.notify, "build_message", return_value=(object(), [])) as build, patch.object(server.notify, "send_message"):
